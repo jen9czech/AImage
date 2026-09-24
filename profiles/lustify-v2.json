@@ -9,7 +9,7 @@
   },
   "args": [
     "--model", "{root}/models/lustifySDXLNSFWSFW_v20.safetensors",
-    "--backend", "diffusion=cuda0,te=cpu,vae=cpu",
+    "--backend", "diffusion=cuda0,te=cpu,vae=cuda0",
     "--sampling-method", "dpm++2m_sde",
     "--scheduler", "karras",
     "--cfg-scale", "5.0",

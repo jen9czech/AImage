@@ -25,7 +25,7 @@ function Download-File([string]$Url, [string]$Destination) {
     }
     $partial = "$Destination.part"
     Write-Host "Downloading $([IO.Path]::GetFileName($Destination)) ..." -ForegroundColor Cyan
-    & curl.exe -L --fail --retry 3 --retry-delay 3 -C - -o $partial $Url
+    & curl.exe -L --fail --retry 20 --retry-all-errors --retry-delay 3 -C - -o $partial $Url
     if ($LASTEXITCODE -ne 0) { throw "Download failed: $Url" }
     if ((Get-Item $partial).Length -eq 0) { throw "Downloaded file is empty: $Url" }
     Move-Item -Force $partial $Destination
