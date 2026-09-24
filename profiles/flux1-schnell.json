@@ -1,0 +1,23 @@
+{
+  "id": "flux1-schnell",
+  "name": "FLUX.1 Schnell (Q3_K)",
+  "requiredFiles": [
+    "models/flux1-schnell-q3_k.gguf",
+    "models/ae.safetensors",
+    "models/clip_l.safetensors",
+    "models/t5xxl_fp16.safetensors"
+  ],
+  "defaults": {
+    "steps": 4
+  },
+  "args": [
+    "--diffusion-model", "{root}/models/flux1-schnell-q3_k.gguf",
+    "--vae", "{root}/models/ae.safetensors",
+    "--clip_l", "{root}/models/clip_l.safetensors",
+    "--t5xxl", "{root}/models/t5xxl_fp16.safetensors",
+    "--backend", "diffusion=cuda0,te=cpu,vae=cpu",
+    "--diffusion-fa",
+    "--cfg-scale", "1.0",
+    "--sampling-method", "euler"
+  ]
+}

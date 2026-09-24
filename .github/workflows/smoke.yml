@@ -1,0 +1,17 @@
+name: Smoke test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  queue:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test queue without model downloads
+        shell: pwsh
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\queue-smoke.ps1

@@ -1,0 +1,11 @@
+# Downloaded binaries and model weights
+/downloads/
+/engine/
+/models/
+
+# User data and generated images
+/output/
+/queue/
+
+# Temporary smoke test sandboxes
+/tests/.queue-smoke-*/
