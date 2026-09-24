@@ -18,6 +18,7 @@ param(
     [int]$Seed = 42,
 
     [string]$Model = 'qwen-image-2.1-Q4_K_M.gguf',
+    [string]$NegativePrompt,
 
     [string]$ReferenceImage,
     [string]$InitImage,
@@ -76,8 +77,8 @@ if ([IO.Path]::GetFileName($Model) -eq $Model -and $Model -match '^qwen[-_]image
     $ModelLabel = if ($profile.name) { $profile.name } else { $Model }
     $ModelArgs = @($profile.args | ForEach-Object { ([string]$_).Replace('{root}', $BaseDir) })
     if ($Steps -eq 0) { $Steps = if ($profile.defaults.steps -gt 0) { [int]$profile.defaults.steps } else { 40 } }
-    if (@($ModelArgs | Where-Object { $_ -match '^(-p|--prompt|-o|--output|-W|--width|-H|--height|--steps|-s|--seed)$' }).Count) {
-        throw "Profile '$Model' contains a job-specific argument. Remove prompt, output, size, steps, and seed from its args."
+    if (@($ModelArgs | Where-Object { $_ -match '^(-p|--prompt|-n|--negative-prompt|-o|--output|-W|--width|-H|--height|--steps|-s|--seed)$' }).Count) {
+        throw "Profile '$Model' contains a job-specific argument. Remove prompt, negative prompt, output, size, steps, and seed from its args."
     }
 }
 
@@ -123,8 +124,10 @@ Write-Host "Size   : ${Width}x${Height}"
 Write-Host "Steps  : $Steps"
 Write-Host "Seed   : $Seed"
 Write-Host "Prompt : $Prompt"
+if ($NegativePrompt) { Write-Host "Avoid  : $NegativePrompt" }
 Write-Host ""
 
+if ($NegativePrompt) { $ModelArgs += @('--negative-prompt', $NegativePrompt) }
 & $EnginePath @ModelArgs `
     --steps $Steps `
     --seed $Seed `

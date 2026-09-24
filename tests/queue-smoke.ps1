@@ -19,11 +19,12 @@ try {
         args = @('--diffusion-model', '{root}/models/other-model.gguf')
     } | ConvertTo-Json | Set-Content -Path (Join-Path $sandbox 'profiles\other-family.json') -Encoding UTF8
     @'
-param([string]$OutputName, [string]$Prompt, [int]$Width, [int]$Height, [int]$Steps, [int]$Seed, [string]$Model,
+param([string]$OutputName, [string]$Prompt, [string]$NegativePrompt, [int]$Width, [int]$Height, [int]$Steps, [int]$Seed, [string]$Model,
     [string]$ReferenceImage, [string]$InitImage, [double]$Strength)
 if ($Prompt -eq 'FAIL') { exit 7 }
 New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'output') | Out-Null
 $detail = if ($ReferenceImage) { "|ref=$ReferenceImage" } elseif ($InitImage) { "|init=$InitImage|strength=$Strength" } else { '' }
+if ($NegativePrompt) { $detail += "|negative=$NegativePrompt" }
 Set-Content -Path (Join-Path $PSScriptRoot "output\$OutputName") -Value "$Prompt$detail"
 '@ | Set-Content -Path (Join-Path $sandbox 'qwen21.ps1') -Encoding UTF8
     @('First prompt', '', 'FAIL', 'Third prompt') | Set-Content -Path (Join-Path $sandbox 'prompts.txt') -Encoding UTF8
@@ -51,12 +52,14 @@ Set-Content -Path (Join-Path $PSScriptRoot "output\$OutputName") -Value "$Prompt
     if ($LASTEXITCODE -ne 0) { throw 'Remove failed.' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $queue model -Model other-family
     if ($LASTEXITCODE -ne 0) { throw 'Cross-family profile selection failed.' }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $queue add -Prompt 'Another family prompt' -Width 512 -Height 512 -Steps 2
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $queue add -Prompt 'Another family prompt' -NegativePrompt 'blurry' -Width 512 -Height 512 -Steps 2
     if ($LASTEXITCODE -ne 0) { throw 'Cross-family add failed.' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $queue run -Limit 1
     if ($LASTEXITCODE -ne 0) { throw 'Cross-family run failed.' }
     $state = Get-Content (Join-Path $sandbox 'queue\jobs.json') -Raw | ConvertFrom-Json
     if ($state.jobs[-1].model -ne 'other-family' -or $state.jobs[-1].status -ne 'done') { throw 'Cross-family job mismatch.' }
+    $otherImage = Get-Content (Join-Path $sandbox "output\$($state.jobs[-1].output)") -Raw
+    if ($state.jobs[-1].negativePrompt -ne 'blurry' -or $otherImage -notmatch '\|negative=blurry') { throw 'Negative prompt did not reach the runner.' }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $queue add -Prompt 'Uses profile step default' -Width 512 -Height 512
     if ($LASTEXITCODE -ne 0) { throw 'Profile-default add failed.' }
     $state = Get-Content (Join-Path $sandbox 'queue\jobs.json') -Raw | ConvertFrom-Json

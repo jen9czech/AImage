@@ -11,6 +11,7 @@ This repository contains scripts and configuration, not the downloaded engine or
 | Optional FLUX.1 Schnell GGUF | [leejet/FLUX.1-schnell-gguf](https://huggingface.co/leejet/FLUX.1-schnell-gguf) | [Apache-2.0](https://huggingface.co/leejet/FLUX.1-schnell-gguf) |
 | Optional FLUX.1 Schnell VAE | [unsloth/FLUX.1-schnell](https://huggingface.co/unsloth/FLUX.1-schnell) | [Apache-2.0](https://huggingface.co/unsloth/FLUX.1-schnell) |
 | Optional FLUX text encoders | [comfyanonymous/flux_text_encoders](https://huggingface.co/comfyanonymous/flux_text_encoders) | [Apache-2.0](https://huggingface.co/comfyanonymous/flux_text_encoders) |
+| Optional LUSTIFY v2.0 SDXL checkpoint | [shootstuff/LUSTIFY-v2.0](https://huggingface.co/shootstuff/LUSTIFY-v2.0) | No license is declared on this Hugging Face model page; review the model card and original publisher's terms before use or redistribution. |
 
 The Qwen Image 2.1 source license limits use of its materials to non-commercial research or evaluation unless a separate commercial license is obtained. Users should review the current source terms before downloading or using the weights. The optional FLUX.1 Schnell model has different terms.
 

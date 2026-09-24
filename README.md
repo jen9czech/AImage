@@ -76,7 +76,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -ModelFamily flu
 
 This downloads the [FLUX.1 Schnell Q3_K GGUF](https://huggingface.co/leejet/FLUX.1-schnell-gguf/tree/main), [VAE](https://huggingface.co/unsloth/FLUX.1-schnell/blob/main/ae.safetensors), and [CLIP/T5 encoders](https://huggingface.co/comfyanonymous/flux_text_encoders/tree/main), then makes it the default for new jobs. It needs about 16 GB of additional disk space and substantial system RAM for the FP16 T5 encoder. Its profile defaults to four steps. The engine settings follow the [upstream FLUX guide](https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/flux.md). The existing Qwen files and jobs stay available.
 
-For `-PromptFile`, save one prompt per line as UTF-8; blank lines are ignored. `run` processes queued jobs in order and continues after a failed job. Add `-Limit 1` to process only the next job. Each job receives a unique PNG filename in `output\`. Defaults are 1024×1024, 40 Euler steps, CFG 6.0, and a random seed (`-1`). Dimensions must be multiples of 32.
+For an SDXL checkpoint example, install [LUSTIFY v2.0](https://huggingface.co/shootstuff/LUSTIFY-v2.0) (about 6.94 GB):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\setup.ps1 -ModelFamily lustify-v2
+.\queue.cmd add "A cinematic portrait in warm evening light" -NegativePrompt "blurry, low quality"
+.\queue.cmd run
+```
+
+The included profile uses the checkpoint's recommended 30 steps, DPM++ 2M SDE sampler, Karras scheduler, and CFG 5. It uses the same queue and output folder, and `queue.cmd model -Model ID` can switch back to another installed family. `-NegativePrompt` is optional, applies to every prompt in one batch, and can be changed on a queued job with `queue.cmd edit -Id ID -NegativePrompt "..."`. Pass an empty string to clear it. LUSTIFY is a third-party SDXL model that can generate explicit imagery; review its model card and terms before use.
+
+For `-PromptFile`, save one prompt per line as UTF-8; blank lines are ignored. `run` processes queued jobs in order and continues after a failed job. Add `-Limit 1` to process only the next job. Each job receives a unique PNG filename in `output\`. The Qwen defaults are 1024×1024, 40 Euler steps, CFG 6.0, and a random seed (`-1`); profiles can override steps and other engine settings. Dimensions must be multiples of 32.
 
 Jobs have short IDs shown by `list`. A unique ID prefix is enough for these commands:
 
@@ -143,4 +153,4 @@ Run the queue smoke test on Windows without downloading weights or using a GPU:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\queue-smoke.ps1
 ```
 
-The test uses temporary stub files and checks batch input, model selection, queue edits and retries, and image input routing. End-to-end generation still requires the real engine, models, and a CUDA-capable GPU. A Windows UI is planned; this repository currently provides command line scripts.
+The test uses temporary stub files and checks batch input, model selection, negative prompt routing, queue edits and retries, and image input routing. End-to-end generation still requires the real engine, models, and a CUDA-capable GPU. A Windows UI is planned; this repository currently provides command line scripts.

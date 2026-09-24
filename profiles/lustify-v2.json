@@ -1,0 +1,18 @@
+{
+  "id": "lustify-v2",
+  "name": "LUSTIFY v2.0 (SDXL checkpoint)",
+  "requiredFiles": [
+    "models/lustifySDXLNSFWSFW_v20.safetensors"
+  ],
+  "defaults": {
+    "steps": 30
+  },
+  "args": [
+    "--model", "{root}/models/lustifySDXLNSFWSFW_v20.safetensors",
+    "--backend", "diffusion=cuda0,te=cpu,vae=cpu",
+    "--sampling-method", "dpm++2m_sde",
+    "--scheduler", "karras",
+    "--cfg-scale", "5.0",
+    "--vae-tiling"
+  ]
+}

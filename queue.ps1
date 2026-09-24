@@ -7,6 +7,7 @@ param(
     [string]$Prompt,
 
     [string]$PromptFile,
+    [string]$NegativePrompt,
     [string]$Id,
     [string]$OutputName,
     [string]$Model,
@@ -154,13 +155,13 @@ function Check-Settings {
 try {
     switch ($Action) {
         'help' {
-            Write-Host 'queue.cmd add "prompt" [-Model ID] [-Width 1024] [-Height 1024] [-Steps 40] [-Seed -1]'
+            Write-Host 'queue.cmd add "prompt" [-Model ID] [-NegativePrompt "avoid"] [-Width 1024] [-Height 1024] [-Steps 40] [-Seed -1]'
             Write-Host 'queue.cmd add "edit instruction" -ReferenceImage photo.png'
             Write-Host 'queue.cmd add "variation" -InitImage photo.png -Strength 0.5'
             Write-Host 'queue.cmd add -PromptFile prompts.txt    (one prompt per line)'
             Write-Host 'queue.cmd list | run [-Limit 1] | models'
             Write-Host 'queue.cmd model -Model ID              (default for new jobs)'
-            Write-Host 'queue.cmd edit -Id ID -Prompt "new prompt" [-Model ID]'
+            Write-Host 'queue.cmd edit -Id ID -Prompt "new prompt" [-NegativePrompt "avoid"] [-Model ID]'
             Write-Host 'queue.cmd retry -Id ID | remove -Id ID'
         }
         'add' {
@@ -204,7 +205,7 @@ try {
                     $stagedReference = Stage-Image $ReferenceImage $newId 'reference'
                     $stagedInit = Stage-Image $InitImage $newId 'init'
                     $jobs += [pscustomobject]@{
-                        id = $newId; status = 'queued'; prompt = $text; output = $name
+                        id = $newId; status = 'queued'; prompt = $text; negativePrompt = $NegativePrompt; output = $name
                         width = $Width; height = $Height; steps = $selectedSteps; seed = $Seed; model = $selectedModel
                         referenceImage = $stagedReference; initImage = $stagedInit; strength = $Strength
                         createdAt = (Get-Date).ToUniversalTime().ToString('o'); error = $null
@@ -222,6 +223,7 @@ try {
                 Write-Host "[$($job.status)] $($job.id) | $($job.width)x$($job.height), $($job.steps) steps, seed $($job.seed) | $($job.prompt)"
                 $jobModel = if ($job.model) { $job.model } else { 'qwen-image-2.1-Q4_K_M.gguf' }
                 Write-Host "    $jobModel -> output\$($job.output)"
+                if ($job.negativePrompt) { Write-Host "    avoid: $($job.negativePrompt)" }
                 if ($job.referenceImage) { Write-Host "    reference: $($job.referenceImage)" }
                 if ($job.initImage) { Write-Host "    initial image: $($job.initImage) (strength $($job.strength))" }
                 if ($job.error) { Write-Host "    Error: $($job.error)" }
@@ -261,12 +263,16 @@ try {
             } finally { $StateMutex.ReleaseMutex() }
         }
         'edit' {
-            if ([string]::IsNullOrWhiteSpace($Prompt) -and -not $Model) { throw 'Specify a replacement -Prompt or -Model.' }
+            if ([string]::IsNullOrWhiteSpace($Prompt) -and -not $Model -and -not $PSBoundParameters.ContainsKey('NegativePrompt')) { throw 'Specify a replacement -Prompt, -NegativePrompt, or -Model.' }
             Enter-Lock $StateMutex
             try {
                 $jobs = @(Read-Jobs); $job = Find-Job $jobs $Id
                 if ($job.status -ne 'queued') { throw 'Only queued jobs can be edited.' }
                 if (-not [string]::IsNullOrWhiteSpace($Prompt)) { $job.prompt = $Prompt.Trim() }
+                if ($PSBoundParameters.ContainsKey('NegativePrompt')) {
+                    if ($job.PSObject.Properties['negativePrompt']) { $job.negativePrompt = $NegativePrompt }
+                    else { $job | Add-Member -NotePropertyName negativePrompt -NotePropertyValue $NegativePrompt }
+                }
                 if ($Model) {
                     $selectedModel = Resolve-Model $Model
                     if ($job.PSObject.Properties['model']) { $job.model = $selectedModel }
@@ -328,6 +334,7 @@ try {
                         $runnerArgs = @('-OutputName', $job.output, '-Prompt', $job.prompt, '-Width', $job.width,
                             '-Height', $job.height, '-Steps', $job.steps, '-Seed', $job.seed,
                             '-Model', $(if ($job.model) { $job.model } else { 'qwen-image-2.1-Q4_K_M.gguf' }))
+                        if ($job.negativePrompt) { $runnerArgs += @('-NegativePrompt', $job.negativePrompt) }
                         if ($job.referenceImage) { $runnerArgs += @('-ReferenceImage', $job.referenceImage) }
                         if ($job.initImage) {
                             $runnerArgs += @('-InitImage', $job.initImage, '-Strength',

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('qwen21', 'flux1-schnell')]
+    [ValidateSet('qwen21', 'flux1-schnell', 'lustify-v2')]
     [string]$ModelFamily = 'qwen21',
 
     [ValidateSet('Q4_0', 'Q4_K_M', 'Q5_K_M', 'Q6_K', 'Q8_0')]
@@ -85,7 +85,7 @@ if ($ModelFamily -eq 'qwen21') {
         $visionBase = 'https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/main'
         Download-File "$visionBase/mmproj-Qwen3VL-8B-Instruct-F16.gguf?download=true" (Join-Path $ModelsDir 'mmproj-Qwen3VL-8B-Instruct-F16.gguf')
     }
-} else {
+} elseif ($ModelFamily -eq 'flux1-schnell') {
     if ($IncludeVision) { throw '-IncludeVision is for Qwen Image 2.1 only.' }
     $fluxBase = 'https://huggingface.co/leejet/FLUX.1-schnell-gguf/resolve/main'
     $fluxVaeBase = 'https://huggingface.co/unsloth/FLUX.1-schnell/resolve/main'
@@ -94,6 +94,10 @@ if ($ModelFamily -eq 'qwen21') {
     Download-File "$fluxVaeBase/ae.safetensors?download=true" (Join-Path $ModelsDir 'ae.safetensors')
     Download-File "$fluxTextBase/clip_l.safetensors?download=true" (Join-Path $ModelsDir 'clip_l.safetensors')
     Download-File "$fluxTextBase/t5xxl_fp16.safetensors?download=true" (Join-Path $ModelsDir 't5xxl_fp16.safetensors')
+} else {
+    if ($IncludeVision) { throw '-IncludeVision is for Qwen Image 2.1 only.' }
+    $lustifyBase = 'https://huggingface.co/shootstuff/LUSTIFY-v2.0/resolve/main'
+    Download-File "$lustifyBase/lustifySDXLNSFWSFW_v20.safetensors?download=true" (Join-Path $ModelsDir 'lustifySDXLNSFWSFW_v20.safetensors')
 }
 
 Write-Host ''
@@ -101,8 +105,8 @@ Write-Host 'Setup complete.' -ForegroundColor Green
 Write-Host "Engine: $EngineDir"
 Write-Host "Models: $ModelsDir"
 Write-Host ''
-if ($ModelFamily -eq 'flux1-schnell') {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'queue.ps1') model -Model flux1-schnell
-    if ($LASTEXITCODE -ne 0) { throw 'FLUX.1 files downloaded, but selecting its profile failed.' }
+if ($ModelFamily -ne 'qwen21') {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'queue.ps1') model -Model $ModelFamily
+    if ($LASTEXITCODE -ne 0) { throw "Model files downloaded, but selecting $ModelFamily failed." }
 }
 Write-Host 'Next run: queue.cmd add "A photograph of a sheep"' -ForegroundColor Green

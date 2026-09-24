@@ -22,7 +22,7 @@ Example:
 }
 ```
 
-`{root}` becomes the project folder. Use engine options documented for that model family by [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/tree/master/docs). The runner supplies prompt, output, width, height, steps, and seed for each job; leave those options out of `args`. List every required local file in `requiredFiles`. Relative paths there start at the project folder. A profile appears as ready only after all its files exist.
+`{root}` becomes the project folder. Use engine options documented for that model family by [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/tree/master/docs). The runner supplies prompt, negative prompt, output, width, height, steps, and seed for each job; leave those options out of `args`. List every required local file in `requiredFiles`. Relative paths there start at the project folder. A profile appears as ready only after all its files exist.
 
 `defaults.steps` is optional; new jobs use it unless `-Steps` is supplied. The fallback is 40.
 
