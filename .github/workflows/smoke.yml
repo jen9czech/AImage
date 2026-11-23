@@ -15,3 +15,9 @@ jobs:
       - name: Test queue without model downloads
         shell: pwsh
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\queue-smoke.ps1
+      - name: Test runner arguments without model downloads
+        shell: pwsh
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\runner-smoke.ps1
+      - name: Test interactive launcher without model downloads
+        shell: pwsh
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\aimage-smoke.ps1

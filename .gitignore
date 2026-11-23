@@ -1,11 +1,34 @@
 # Downloaded binaries and model weights
 /downloads/
 /engine/
+/engine-vulkan/
 /models/
+/dist/
+*.exe
+*.dll
+*.gguf
+*.safetensors
+*.zip
+*.part
 
 # User data and generated images
 /output/
 /queue/
+/logs/
+/benchmarks/
+*.log
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.webp
+.env
+.env.*
 
 # Temporary smoke test sandboxes
 /tests/.queue-smoke-*/
+/tests/.runner-smoke-*/
+/tests/.aimage-smoke-*/
+/tests/.navigation-*/
+/tests/.history-*/
+/.aimage-*/

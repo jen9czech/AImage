@@ -1,0 +1,20 @@
+{
+  "id": "lustify-v10-krea2-turbo",
+  "name": "Lustify v10 Krea 2 Turbo / Q8 optimized",
+  "requiredFiles": [
+    "{models}/lustifyNSFWCheckpoint_v10Krea2-Q8_0.gguf",
+    "{models}/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+    "{models}/wan_2.1_vae.safetensors"
+  ],
+  "defaults": { "width": 1024, "height": 1024, "steps": 8 },
+  "args": [
+    "--diffusion-model", "{models}/lustifyNSFWCheckpoint_v10Krea2-Q8_0.gguf",
+    "--llm", "{models}/Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+    "--vae", "{models}/wan_2.1_vae.safetensors",
+    "--backend", "diffusion={gpu},te=cpu,vae={gpu}",
+    "--diffusion-fa",
+    "--vae-conv-direct",
+    "--sampling-method", "euler",
+    "--cfg-scale", "1.0"
+  ]
+}

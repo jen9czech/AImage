@@ -7,7 +7,6 @@ param(
     [string]$Prompt,
 
     [string]$PromptFile,
-    [string]$NegativePrompt,
     [string]$Id,
     [string]$OutputName,
     [string]$Model,
@@ -24,11 +23,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $StrengthSpecified = $PSBoundParameters.ContainsKey('Strength')
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $Root 'paths.ps1')
+$Paths = Get-AImagePaths -Root $Root
 $QueueDir = Join-Path $Root 'queue'
 $QueueFile = Join-Path $QueueDir 'jobs.json'
 $SettingsFile = Join-Path $QueueDir 'settings.json'
-$OutputDir = Join-Path $Root 'output'
-$ModelsDir = Join-Path $Root 'models'
+$OutputDir = $Paths.Output
+$ModelsDir = $Paths.Models
 $ProfilesDir = Join-Path $Root 'profiles'
 New-Item -ItemType Directory -Force -Path $QueueDir,$OutputDir | Out-Null
 
@@ -81,7 +82,7 @@ function Resolve-Model([string]$Choice) {
     }
     if ($Choice -match '^qwen[-_]image[-_]2[._]1.*\.gguf$' -and [IO.Path]::GetFileName($Choice) -eq $Choice) {
         if (-not (Test-Path -LiteralPath (Join-Path $ModelsDir $Choice) -PathType Leaf)) {
-            throw "Model not installed: $Choice. Run setup.ps1 -DiffusionQuantization Q5_K_M, or copy a compatible GGUF into models."
+            throw "Model not installed: $Choice. Run setup.ps1 -DiffusionQuantization Q5_K_M, or copy a compatible GGUF into $ModelsDir."
         }
         foreach ($name in @('Qwen3-VL-8B-Instruct-Q4_K_M.gguf', 'qwen_image_2.1_vae_bf16.safetensors')) {
             if (-not (Test-Path -LiteralPath (Join-Path $ModelsDir $name) -PathType Leaf)) { throw "Required companion file missing: $name" }
@@ -94,7 +95,7 @@ function Resolve-Model([string]$Choice) {
     $profile = Get-Content -LiteralPath $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($profile.id -ne $Choice -or -not $profile.args -or -not $profile.requiredFiles) { throw "Invalid profile: $profilePath" }
     foreach ($file in $profile.requiredFiles) {
-        $path = if ([IO.Path]::IsPathRooted($file)) { $file } else { Join-Path $Root $file }
+        $path = Resolve-AImageProfilePath -Path ([string]$file) -Paths $Paths
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Profile '$Choice' needs: $path" }
     }
     return $Choice
@@ -103,7 +104,7 @@ function Resolve-Model([string]$Choice) {
 function Check-ImageMode([string]$Choice) {
     if ($ReferenceImage -and $InitImage) { throw 'Use either -ReferenceImage or -InitImage for one job.' }
     if ($StrengthSpecified -and -not $InitImage) { throw '-Strength applies only with -InitImage.' }
-    if ($Strength -le 0 -or $Strength -gt 1) { throw 'Strength must be greater than 0 and at most 1.' }
+    if ([double]::IsNaN($Strength) -or $Strength -le 0 -or $Strength -gt 1) { throw 'Strength must be greater than 0 and at most 1.' }
     if (-not $ReferenceImage) { return }
     if ($Choice -match '\.gguf$') {
         $vision = Join-Path $ModelsDir 'mmproj-Qwen3VL-8B-Instruct-F16.gguf'
@@ -155,13 +156,13 @@ function Check-Settings {
 try {
     switch ($Action) {
         'help' {
-            Write-Host 'queue.cmd add "prompt" [-Model ID] [-NegativePrompt "avoid"] [-Width 1024] [-Height 1024] [-Steps 40] [-Seed -1]'
+            Write-Host 'queue.cmd add "prompt" [-Model ID] [-Width 1024] [-Height 1024] [-Steps 40] [-Seed -1]'
             Write-Host 'queue.cmd add "edit instruction" -ReferenceImage photo.png'
             Write-Host 'queue.cmd add "variation" -InitImage photo.png -Strength 0.5'
             Write-Host 'queue.cmd add -PromptFile prompts.txt    (one prompt per line)'
             Write-Host 'queue.cmd list | run [-Limit 1] | models'
             Write-Host 'queue.cmd model -Model ID              (default for new jobs)'
-            Write-Host 'queue.cmd edit -Id ID -Prompt "new prompt" [-NegativePrompt "avoid"] [-Model ID]'
+            Write-Host 'queue.cmd edit -Id ID -Prompt "new prompt" [-Model ID]'
             Write-Host 'queue.cmd retry -Id ID | remove -Id ID'
         }
         'add' {
@@ -189,6 +190,17 @@ try {
                 $jobs = @(Read-Jobs)
                 $selectedModel = Resolve-Model $Model
                 Check-ImageMode $selectedModel
+                # Profile dimensions are defaults; explicit job dimensions always win.
+                $selectedWidth = $Width
+                $selectedHeight = $Height
+                if ($selectedModel -notmatch '\.gguf$') {
+                    $profile = Get-Content -LiteralPath (Join-Path $ProfilesDir "$selectedModel.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+                    if (-not $PSBoundParameters.ContainsKey('Width') -and $profile.defaults.width) { $selectedWidth = [int]$profile.defaults.width }
+                    if (-not $PSBoundParameters.ContainsKey('Height') -and $profile.defaults.height) { $selectedHeight = [int]$profile.defaults.height }
+                }
+                if ($selectedWidth -lt 32 -or $selectedWidth % 32 -ne 0 -or $selectedHeight -lt 32 -or $selectedHeight % 32 -ne 0) {
+                    throw 'Profile width and height must be positive multiples of 32.'
+                }
                 $selectedSteps = $Steps
                 if ($selectedSteps -eq 0) {
                     $selectedSteps = 40
@@ -199,18 +211,19 @@ try {
                 }
                 foreach ($text in $prompts) {
                     $newId = [Guid]::NewGuid().ToString('N').Substring(0, 12)
-                    $name = if ($OutputName) { $OutputName } else { "$(Get-Date -Format 'yyyyMMdd-HHmmss')-$newId.png" }
+                    $name = if ($OutputName) { $OutputName } else { New-AImageOutputFileName -Prompt $text -Model $selectedModel -Id $newId }
                     if (Test-Path -LiteralPath (Join-Path $OutputDir $name)) { throw "Output already exists: $name" }
                     if (@($jobs | Where-Object { $_.output -eq $name }).Count) { throw "Output already reserved: $name" }
                     $stagedReference = Stage-Image $ReferenceImage $newId 'reference'
                     $stagedInit = Stage-Image $InitImage $newId 'init'
                     $jobs += [pscustomobject]@{
-                        id = $newId; status = 'queued'; prompt = $text; negativePrompt = $NegativePrompt; output = $name
-                        width = $Width; height = $Height; steps = $selectedSteps; seed = $Seed; model = $selectedModel
+                        id = $newId; status = 'queued'; prompt = $text; output = $name
+                        outputAuto = (-not [bool]$OutputName)
+                        width = $selectedWidth; height = $selectedHeight; steps = $selectedSteps; seed = $Seed; model = $selectedModel
                         referenceImage = $stagedReference; initImage = $stagedInit; strength = $Strength
                         createdAt = (Get-Date).ToUniversalTime().ToString('o'); error = $null
                     }
-                    Write-Host "Queued $newId -> output\$name"
+                    Write-Host "Queued $newId (${selectedWidth}x${selectedHeight}, $selectedSteps steps) -> $(Join-Path $OutputDir $name)"
                 }
                 Save-Jobs $jobs
             } finally { $StateMutex.ReleaseMutex() }
@@ -222,11 +235,11 @@ try {
             foreach ($job in $jobs) {
                 Write-Host "[$($job.status)] $($job.id) | $($job.width)x$($job.height), $($job.steps) steps, seed $($job.seed) | $($job.prompt)"
                 $jobModel = if ($job.model) { $job.model } else { 'qwen-image-2.1-Q4_K_M.gguf' }
-                Write-Host "    $jobModel -> output\$($job.output)"
-                if ($job.negativePrompt) { Write-Host "    avoid: $($job.negativePrompt)" }
+                Write-Host "    $jobModel -> $(Join-Path $OutputDir $job.output)"
                 if ($job.referenceImage) { Write-Host "    reference: $($job.referenceImage)" }
                 if ($job.initImage) { Write-Host "    initial image: $($job.initImage) (strength $($job.strength))" }
                 if ($job.error) { Write-Host "    Error: $($job.error)" }
+                if ($job.PSObject.Properties['elapsedSeconds']) { Write-Host ("    Last run: {0:N1} minutes" -f ($job.elapsedSeconds / 60)) }
             }
         }
         'models' {
@@ -243,7 +256,7 @@ try {
                 $profile = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
                 if ($profile.id -ne $file.BaseName) { continue }
                 $missing = @($profile.requiredFiles | Where-Object {
-                    $path = if ([IO.Path]::IsPathRooted($_)) { $_ } else { Join-Path $Root $_ }
+                    $path = Resolve-AImageProfilePath -Path ([string]$_) -Paths $Paths
                     -not (Test-Path -LiteralPath $path -PathType Leaf)
                 })
                 $mark = if ($profile.id -eq $defaultModel) { '*' } else { ' ' }
@@ -263,20 +276,19 @@ try {
             } finally { $StateMutex.ReleaseMutex() }
         }
         'edit' {
-            if ([string]::IsNullOrWhiteSpace($Prompt) -and -not $Model -and -not $PSBoundParameters.ContainsKey('NegativePrompt')) { throw 'Specify a replacement -Prompt, -NegativePrompt, or -Model.' }
+            if ([string]::IsNullOrWhiteSpace($Prompt) -and -not $Model) { throw 'Specify a replacement -Prompt or -Model.' }
             Enter-Lock $StateMutex
             try {
                 $jobs = @(Read-Jobs); $job = Find-Job $jobs $Id
                 if ($job.status -ne 'queued') { throw 'Only queued jobs can be edited.' }
                 if (-not [string]::IsNullOrWhiteSpace($Prompt)) { $job.prompt = $Prompt.Trim() }
-                if ($PSBoundParameters.ContainsKey('NegativePrompt')) {
-                    if ($job.PSObject.Properties['negativePrompt']) { $job.negativePrompt = $NegativePrompt }
-                    else { $job | Add-Member -NotePropertyName negativePrompt -NotePropertyValue $NegativePrompt }
-                }
                 if ($Model) {
                     $selectedModel = Resolve-Model $Model
                     if ($job.PSObject.Properties['model']) { $job.model = $selectedModel }
                     else { $job | Add-Member -NotePropertyName model -NotePropertyValue $selectedModel }
+                    if ($job.PSObject.Properties['outputAuto'] -and $job.outputAuto) {
+                        $job.output = New-AImageOutputFileName -Prompt $job.prompt -Model $selectedModel -Id $job.id
+                    }
                 }
                 Save-Jobs $jobs
                 Write-Host "Updated $($job.id)"
@@ -328,31 +340,37 @@ try {
                     if (-not $job) { break }
                     Write-Host "Running $($job.id): $($job.prompt)" -ForegroundColor Cyan
                     $resultError = $null
+                    $jobTimer = [Diagnostics.Stopwatch]::StartNew()
                     $outputPath = Join-Path $OutputDir $job.output
                     try {
                         if (Test-Path -LiteralPath $outputPath) { throw "Output already exists: $outputPath" }
-                        $runnerArgs = @('-OutputName', $job.output, '-Prompt', $job.prompt, '-Width', $job.width,
+                        $runnerArgs = @('-OutputName', $job.output, '-PromptFromEnvironment', '-Width', $job.width,
                             '-Height', $job.height, '-Steps', $job.steps, '-Seed', $job.seed,
                             '-Model', $(if ($job.model) { $job.model } else { 'qwen-image-2.1-Q4_K_M.gguf' }))
-                        if ($job.negativePrompt) { $runnerArgs += @('-NegativePrompt', $job.negativePrompt) }
                         if ($job.referenceImage) { $runnerArgs += @('-ReferenceImage', $job.referenceImage) }
                         if ($job.initImage) {
                             $runnerArgs += @('-InitImage', $job.initImage, '-Strength',
                                 ([double]$job.strength).ToString('0.###', [Globalization.CultureInfo]::InvariantCulture))
                         }
-                        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'qwen21.ps1') @runnerArgs
+                        $previousJobPrompt = $env:AIMAGE_JOB_PROMPT
+                        try {
+                            $env:AIMAGE_JOB_PROMPT = $job.prompt
+                            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'qwen21.ps1') @runnerArgs
+                        } finally { $env:AIMAGE_JOB_PROMPT = $previousJobPrompt }
                         if ($LASTEXITCODE -ne 0) { throw "Generator exited with code $LASTEXITCODE" }
                         if (-not (Test-Path -LiteralPath $outputPath)) { throw 'Generator exited successfully without creating the image.' }
                     } catch { $resultError = $_.Exception.Message }
+                    $jobTimer.Stop()
                     Enter-Lock $StateMutex
                     try {
                         $jobs = @(Read-Jobs); $current = Find-Job $jobs $job.id
+                        $current | Add-Member -NotePropertyName elapsedSeconds -NotePropertyValue ([math]::Round($jobTimer.Elapsed.TotalSeconds, 2)) -Force
                         if ($resultError) {
                             $current.status = 'failed'; $current.error = $resultError; $failures++
                             Write-Warning "$($job.id) failed: $resultError"
                         } else {
                             $current.status = 'done'; $current.error = $null
-                            Write-Host "Done: $outputPath" -ForegroundColor Green
+                            Write-Host ("Done in {0:N1} minutes: {1}" -f $jobTimer.Elapsed.TotalMinutes, $outputPath) -ForegroundColor Green
                         }
                         Save-Jobs $jobs
                     } finally { $StateMutex.ReleaseMutex() }

@@ -1,0 +1,17 @@
+{
+  "id": "lustify-zenith-v9",
+  "name": "Lustify Zenith V9 / SDXL / GPU",
+  "requiredFiles": [
+    "{models}/lustifyNSFWCheckpoint_zenithV9.safetensors"
+  ],
+  "defaults": { "width": 1024, "height": 1024, "steps": 20 },
+  "args": [
+    "--model", "{models}/lustifyNSFWCheckpoint_zenithV9.safetensors",
+    "--backend", "diffusion={gpu},te=cpu,vae={gpu}",
+    "--diffusion-fa",
+    "--vae-conv-direct",
+    "--sampling-method", "dpm++2m",
+    "--scheduler", "karras",
+    "--cfg-scale", "5.5"
+  ]
+}
